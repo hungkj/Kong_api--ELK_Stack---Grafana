@@ -1,0 +1,125 @@
+
+
+services:
+  kong:
+    image: kong:latest
+    user: root
+    restart: always
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+    volumes:
+      - ./kong.yml:/etc/kong/kong.yml
+    ports:
+      - "8000:8000"  # Cổng truy cập API Gateway
+      - "8001:8001"  # Cổng Admin UI
+    networks:
+      - kong-network
+
+  order_service:
+    build: ./order_service
+    container_name: order_service
+    restart: always
+    ports:
+      - "5001:5001"
+    env_file:
+      - .env
+    networks:
+      - kong-network
+
+  payment_service:
+    build: ./payment_service
+    container_name: payment_service
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "5002:5002"
+    networks:
+      - kong-network
+
+  product_service:
+    build: ./product_service
+    container_name: product_service
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "5003:5003"
+    networks:
+      - kong-network
+  
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    networks:
+      - kong-network
+
+  #  Logstash (Nhận log từ Kong)
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.8.0
+    container_name: logstash
+    user: root 
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+      - /var/run/docker.sock:/var/run/docker.sock  # Cấp quyền đọc Docker Stats
+    environment:
+      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+    command: >
+      /bin/bash -c "apt-get update && apt-get install -y docker.io && /usr/local/bin/docker-entrypoint"
+    ports:
+      - "5044:5044" # Cổng nhận log từ Kong
+    depends_on:
+      - elasticsearch
+    networks:
+      - kong-network
+
+  #  Kibana (Hiển thị log)
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.8.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - kong-network
+  
+
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - kong-network
+    depends_on:
+      - elasticsearch
+
+networks:
+  kong-network:
+    driver: bridge
+  
+volumes:
+  grafana-data:
+    driver: local

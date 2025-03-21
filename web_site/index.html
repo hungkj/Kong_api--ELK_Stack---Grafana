@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Danh sách sản phẩm</title>
+    <script>
+        let cart = []; // Giỏ hàng tạm thời
+
+        async function loadProducts() {
+            try {
+                const response = await fetch("http://127.0.0.1:5000/products");
+                const products = await response.json();
+                let productList = document.getElementById("product-list");
+                productList.innerHTML = "";
+
+                products.forEach(product => {
+                    productList.innerHTML += `
+                        <div>
+                            <img src="${product.image}" width="200">
+                            <h3>${product.name}</h3>
+                            <p>Giá: ${product.price} VND</p>
+                            <input type="number" id="qty-${product.id}" value="1" min="1" style="width:50px;">
+                            <button onclick="addToCart('${product.id}', '${product.name}', ${product.price})">
+                                Thêm vào giỏ
+                            </button>
+                        </div>
+                    `;
+                });
+            } catch (error) {
+                console.error("Lỗi tải sản phẩm:", error);
+            }
+        }
+
+        function addToCart(productId, productName, price) {
+            let quantity = document.getElementById(`qty-${productId}`).value;
+            quantity = parseInt(quantity);
+            if (quantity <= 0) {
+                alert("Số lượng không hợp lệ!");
+                return;
+            }
+
+            let existing = cart.find(p => p.product_id === productId);
+            if (existing) {
+                existing.quantity += quantity;
+            } else {
+                cart.push({ product_id: productId, name: productName, price: price, quantity: quantity });
+            }
+
+            alert(`Đã thêm ${quantity} sản phẩm ${productName} vào giỏ hàng.`);
+            console.log("Giỏ hàng hiện tại:", cart);
+        }
+
+        async function placeOrder() {
+            if (cart.length === 0) {
+                alert("Giỏ hàng đang trống!");
+                return;
+            }
+
+            let orderData = {
+                name: prompt("Nhập tên của bạn:"),
+                phone: prompt("Nhập số điện thoại:"),
+                address: prompt("Nhập địa chỉ giao hàng:"),
+                products: cart
+            };
+
+            if (!orderData.name || !orderData.phone || !orderData.address) {
+                alert("Bạn cần nhập đầy đủ thông tin đặt hàng!");
+                return;
+            }
+
+            try {
+                const response = await fetch("http://127.0.0.1:5000/orders", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(orderData)
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert(result.message);
+                    await processPayment(result.order_id);
+                }
+            } catch (error) {
+                alert("Lỗi khi đặt hàng, vui lòng thử lại!");
+                console.error(error);
+            }
+        }
+
+        async function processPayment(orderId) {
+            try {
+                const response = await fetch("http://127.0.0.1:5000/payments", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ order_id: orderId })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert(result.message);
+                    cart = []; // Xóa giỏ hàng sau khi thanh toán thành công
+                }
+            } catch (error) {
+                alert("Lỗi khi thanh toán, vui lòng thử lại!");
+                console.error(error);
+            }
+        }
+
+        window.onload = loadProducts;
+    </script>
+</head>
+<body>
+    <h1>Danh sách sản phẩm</h1>
+    <div id="product-list"></div>
+    <button onclick="placeOrder()" style="margin-top:20px; padding:10px;">🛒 Đặt hàng ngay</button>
+</body>
+</html>

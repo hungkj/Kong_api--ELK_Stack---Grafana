@@ -1,0 +1,47 @@
+_format_version: "1.1"
+
+services:
+  - name: order_service
+    url: http://order_service:5001
+    routes:
+      - name: order-route
+        paths:
+          - /orders
+        strip_path: false
+    plugins:
+      - name: http-log
+        config:
+          http_endpoint: "http://logstash:5044"
+          method: "POST"
+          timeout: 10000
+          queue_size: 10
+
+  - name: payment_service
+    url: http://payment_service:5002
+    routes:
+      - name: payment-route
+        paths:
+          - /payments
+        strip_path: false
+    plugins:
+      - name: http-log
+        config:
+          http_endpoint: "http://logstash:5044"
+          method: "POST"
+          timeout: 10000
+          queue_size: 10
+
+  - name: product_service
+    url: http://product_service:5003
+    routes:
+      - name: product-route
+        paths:
+          - /products
+        strip_path: false
+    plugins:
+      - name: http-log
+        config:
+          http_endpoint: "http://logstash:5044"
+          method: "POST"
+          timeout: 10000
+          queue_size: 10
